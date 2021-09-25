@@ -22,7 +22,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "qcommon/q_shared.h"
-#include <vulkan/vulkan.h>
 #include <vector>
 
 #define MAXPRINTMSG 4096
@@ -207,7 +206,7 @@ void		WIN_SetGamma( glconfig_t *glConfig, byte red[256], byte green[256], byte b
 void		WIN_Shutdown( void );
 void *		WIN_GL_GetProcAddress( const char *proc );
 qboolean	WIN_GL_ExtensionSupported( const char *extension );
-void		WIN_VK_GetExtensions(VkInstance * instance, std::vector<const char*> *additionalExtensions);
-void		WIN_VK_CreateSurface(VkInstance * instance, VkSurfaceKHR * surface);
+void		WIN_VK_GetExtensions(void * inst, std::vector<const char*> *additionalExtensions);
+void		WIN_VK_CreateSurface(void * instance, void * surface);
 
 uint8_t ConvertUTF32ToExpectedCharset( uint32_t utf32 );

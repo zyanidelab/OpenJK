@@ -1018,13 +1018,14 @@ static rserr_t VKimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	return RSERR_OK;
 }
 
-void WIN_VK_CreateSurface(VkInstance * instance, VkSurfaceKHR * surface) {
-
-    if(!SDL_Vulkan_CreateSurface(screen, *instance, surface))
+void WIN_VK_CreateSurface(void * instance, void * surface) {
+    
+    if(!SDL_Vulkan_CreateSurface(screen, *(VkInstance*)instance, (VkSurfaceKHR *) surface))
         Com_Error(ERR_FATAL, "SDL_Vulkan: Could not create surface "); 
 }
 
-void WIN_VK_GetExtensions(VkInstance * instance, std::vector<const char*> *additionalExtensions) {
+void WIN_VK_GetExtensions(void * inst, std::vector<const char*> *additionalExtensions) {
+	VkInstance * instance = (VkInstance *)inst;
 	const char* instance_extensions[] = {
 #ifdef _WIN32
 		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,

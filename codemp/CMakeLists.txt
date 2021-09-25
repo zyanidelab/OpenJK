@@ -405,7 +405,11 @@ if(BuildMPEngine)
 		set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${SDL2_INCLUDE_DIRS})
 		set(MPEngineLibraries ${MPEngineLibraries} ${SDL2_LIBRARIES})
 	endif()
-
+	
+    find_package(Vulkan REQUIRED)
+    list(APPEND MPEngineIncludeDirectories ${Vulkan_INCLUDE_DIR})
+    list(APPEND MPEngineLibraries          ${Vulkan_LIBRARY})
+    
 	# EAX is Windows-Only (right?)
 	if(MSVC)
 		set(MPEngineEAXFiles
