@@ -19,8 +19,17 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 
+#ifdef _WIN32
+#define VK_USE_PLATFORM_WIN32_KHR
+#else
+#define VK_USE_PLATFORM_XLIB_KHR
+#endif
+
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <SDL_vulkan.h>
+#include <vulkan/vulkan.h>
+#include <vector>
 #include "qcommon/qcommon.h"
 #include "rd-common/tr_types.h"
 #include "sys/sys_local.h"
@@ -331,6 +340,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	{
 		flags |= SDL_WINDOW_OPENGL;
 	}
+
 
 	Com_Printf( "Initializing display\n");
 
@@ -659,6 +669,429 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	return RSERR_OK;
 }
 
+
+/*
+===============
+VKimp_SetMode
+===============
+*/
+static rserr_t VKimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDesc, const char *windowTitle, int mode, qboolean fullscreen, qboolean noborder)
+{
+	int perChannelColorBits;
+	int colorBits, depthBits, stencilBits;
+	int samples;
+	int i = 0;
+	SDL_Surface *icon = NULL;
+	Uint32 flags = SDL_WINDOW_SHOWN;
+	SDL_DisplayMode desktopMode;
+	int display = 0;
+	int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
+
+	
+    flags |= SDL_WINDOW_VULKAN;
+    
+
+	Com_Printf( "Initializing display\n");
+
+	icon = SDL_CreateRGBSurfaceFrom(
+		(void *)CLIENT_WINDOW_ICON.pixel_data,
+		CLIENT_WINDOW_ICON.width,
+		CLIENT_WINDOW_ICON.height,
+		CLIENT_WINDOW_ICON.bytes_per_pixel * 8,
+		CLIENT_WINDOW_ICON.bytes_per_pixel * CLIENT_WINDOW_ICON.width,
+#ifdef Q3_LITTLE_ENDIAN
+		0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000
+#else
+		0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF
+#endif
+		);
+
+	// If a window exists, note its display index
+	if ( screen != NULL )
+	{
+		display = SDL_GetWindowDisplayIndex( screen );
+		if ( display < 0 )
+		{
+			Com_DPrintf( "SDL_GetWindowDisplayIndex() failed: %s\n", SDL_GetError() );
+		}
+	}
+
+	if( display >= 0 && SDL_GetDesktopDisplayMode( display, &desktopMode ) == 0 )
+	{
+		displayAspect = (float)desktopMode.w / (float)desktopMode.h;
+
+		Com_Printf( "Display aspect: %.3f\n", displayAspect );
+	}
+	else
+	{
+		Com_Memset( &desktopMode, 0, sizeof( SDL_DisplayMode ) );
+
+		Com_Printf( "Cannot determine display aspect, assuming 1.333\n" );
+	}
+
+	Com_Printf( "...setting mode %d:", mode );
+
+	if (mode == -2)
+	{
+		// use desktop video resolution
+		if( desktopMode.h > 0 )
+		{
+			glConfig->vidWidth = desktopMode.w;
+			glConfig->vidHeight = desktopMode.h;
+		}
+		else
+		{
+			glConfig->vidWidth = 640;
+			glConfig->vidHeight = 480;
+			Com_Printf( "Cannot determine display resolution, assuming 640x480\n" );
+		}
+
+		//glConfig.windowAspect = (float)glConfig.vidWidth / (float)glConfig.vidHeight;
+	}
+	else if ( !R_GetModeInfo( &glConfig->vidWidth, &glConfig->vidHeight, /*&glConfig.windowAspect,*/ mode ) )
+	{
+		Com_Printf( " invalid mode\n" );
+		SDL_FreeSurface( icon );
+		return RSERR_INVALID_MODE;
+	}
+	Com_Printf( " %d %d\n", glConfig->vidWidth, glConfig->vidHeight);
+
+	// Center window
+	if( r_centerWindow->integer && !fullscreen )
+	{
+		x = ( desktopMode.w / 2 ) - ( glConfig->vidWidth / 2 );
+		y = ( desktopMode.h / 2 ) - ( glConfig->vidHeight / 2 );
+	}
+
+	// Destroy existing state if it exists
+	if( opengl_context != NULL )
+	{
+		SDL_GL_DeleteContext( opengl_context );
+		opengl_context = NULL;
+	}
+
+	if( screen != NULL )
+	{
+		SDL_GetWindowPosition( screen, &x, &y );
+		Com_DPrintf( "Existing window at %dx%d before being destroyed\n", x, y );
+		SDL_DestroyWindow( screen );
+		screen = NULL;
+	}
+
+	if( fullscreen )
+	{
+		flags |= SDL_WINDOW_FULLSCREEN;
+		glConfig->isFullscreen = qtrue;
+	}
+	else
+	{
+		if( noborder )
+			flags |= SDL_WINDOW_BORDERLESS;
+
+		glConfig->isFullscreen = qfalse;
+	}
+
+	colorBits = r_colorbits->integer;
+	if ((!colorBits) || (colorBits >= 32))
+		colorBits = 24;
+
+	if (!r_depthbits->integer)
+		depthBits = 24;
+	else
+		depthBits = r_depthbits->integer;
+
+	stencilBits = r_stencilbits->integer;
+	samples = r_ext_multisample->integer;
+
+	if ( windowDesc->api == GRAPHICS_API_OPENGL )
+	{
+		for (i = 0; i < 16; i++)
+		{
+			int testColorBits, testDepthBits, testStencilBits;
+
+			// 0 - default
+			// 1 - minus colorBits
+			// 2 - minus depthBits
+			// 3 - minus stencil
+			if ((i % 4) == 0 && i)
+			{
+				// one pass, reduce
+				switch (i / 4)
+				{
+					case 2 :
+						if (colorBits == 24)
+							colorBits = 16;
+						break;
+					case 1 :
+						if (depthBits == 24)
+							depthBits = 16;
+						else if (depthBits == 16)
+							depthBits = 8;
+					case 3 :
+						if (stencilBits == 24)
+							stencilBits = 16;
+						else if (stencilBits == 16)
+							stencilBits = 8;
+				}
+			}
+
+			testColorBits = colorBits;
+			testDepthBits = depthBits;
+			testStencilBits = stencilBits;
+
+			if ((i % 4) == 3)
+			{ // reduce colorBits
+				if (testColorBits == 24)
+					testColorBits = 16;
+			}
+
+			if ((i % 4) == 2)
+			{ // reduce depthBits
+				if (testDepthBits == 24)
+					testDepthBits = 16;
+				else if (testDepthBits == 16)
+					testDepthBits = 8;
+			}
+
+			if ((i % 4) == 1)
+			{ // reduce stencilBits
+				if (testStencilBits == 24)
+					testStencilBits = 16;
+				else if (testStencilBits == 16)
+					testStencilBits = 8;
+				else
+					testStencilBits = 0;
+			}
+
+			if (testColorBits == 24)
+				perChannelColorBits = 8;
+			else
+				perChannelColorBits = 4;
+
+			/*SDL_GL_SetAttribute( SDL_GL_RED_SIZE, perChannelColorBits );
+			SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, perChannelColorBits );
+			SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, perChannelColorBits );
+			SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, testDepthBits );
+			SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, testStencilBits );
+
+			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, samples ? 1 : 0 );
+			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, samples );*/
+
+			/*if ( windowDesc->gl.majorVersion )
+			{
+				int compactVersion = windowDesc->gl.majorVersion * 100 + windowDesc->gl.minorVersion * 10;
+
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, windowDesc->gl.majorVersion );
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, windowDesc->gl.minorVersion );
+
+				if ( windowDesc->gl.profile == GLPROFILE_ES || compactVersion >= 320 )
+				{
+					int profile;
+					switch ( windowDesc->gl.profile )
+					{
+					default:
+					case GLPROFILE_COMPATIBILITY:
+						profile = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
+						break;
+
+					case GLPROFILE_CORE:
+						profile = SDL_GL_CONTEXT_PROFILE_CORE;
+						break;
+
+					case GLPROFILE_ES:
+						profile = SDL_GL_CONTEXT_PROFILE_ES;
+						break;
+					}
+
+					SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, profile );
+				}
+			}*/
+
+			/*if ( windowDesc->gl.contextFlags & GLCONTEXT_DEBUG )
+			{
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG );
+			}
+
+			if(r_stereo->integer)
+			{
+				glConfig->stereoEnabled = qtrue;
+				SDL_GL_SetAttribute(SDL_GL_STEREO, 1);
+			}
+			else
+			{
+				glConfig->stereoEnabled = qfalse;
+				SDL_GL_SetAttribute(SDL_GL_STEREO, 0);
+			}
+
+			SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, !r_allowSoftwareGL->integer );*/
+
+			if( ( screen = SDL_CreateWindow( windowTitle, x, y,
+					glConfig->vidWidth, glConfig->vidHeight, flags ) ) == NULL )
+			{
+				Com_DPrintf( "SDL_CreateWindow failed: %s\n", SDL_GetError( ) );
+				continue;
+			}
+
+#ifndef MACOS_X
+			SDL_SetWindowIcon( screen, icon );
+#endif
+
+			if( fullscreen )
+			{
+				SDL_DisplayMode mode;
+
+				switch( testColorBits )
+				{
+					case 16: mode.format = SDL_PIXELFORMAT_RGB565; break;
+					case 24: mode.format = SDL_PIXELFORMAT_RGB24;  break;
+					default: Com_DPrintf( "testColorBits is %d, can't fullscreen\n", testColorBits ); continue;
+				}
+
+				mode.w = glConfig->vidWidth;
+				mode.h = glConfig->vidHeight;
+				mode.refresh_rate = glConfig->displayFrequency = r_displayRefresh->integer;
+				mode.driverdata = NULL;
+
+				if( SDL_SetWindowDisplayMode( screen, &mode ) < 0 )
+				{
+					Com_DPrintf( "SDL_SetWindowDisplayMode failed: %s\n", SDL_GetError( ) );
+					continue;
+				}
+			}
+
+			/*if( ( opengl_context = SDL_GL_CreateContext( screen ) ) == NULL )
+			{
+				Com_Printf( "SDL_GL_CreateContext failed: %s\n", SDL_GetError( ) );
+				continue;
+			}
+
+			if ( SDL_GL_SetSwapInterval( r_swapInterval->integer ) == -1 )
+			{
+				Com_DPrintf( "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError() );
+			}*/
+
+			glConfig->colorBits = testColorBits;
+			glConfig->depthBits = testDepthBits;
+			glConfig->stencilBits = testStencilBits;
+
+			Com_Printf( "Using %d color bits, %d depth, %d stencil display.\n",
+					glConfig->colorBits, glConfig->depthBits, glConfig->stencilBits );
+			break;
+		}
+
+		/*if (opengl_context == NULL) {
+			SDL_FreeSurface(icon);
+			return RSERR_UNKNOWN;
+		}*/
+	}
+	else
+	{
+		// Just create a regular window
+		if( ( screen = SDL_CreateWindow( windowTitle, x, y,
+				glConfig->vidWidth, glConfig->vidHeight, flags ) ) == NULL )
+		{
+			Com_DPrintf( "SDL_CreateWindow failed: %s\n", SDL_GetError( ) );
+		}
+		else
+		{
+#ifndef MACOS_X
+			SDL_SetWindowIcon( screen, icon );
+#endif
+			if( fullscreen )
+			{
+				if( SDL_SetWindowDisplayMode( screen, NULL ) < 0 )
+				{
+					Com_DPrintf( "SDL_SetWindowDisplayMode failed: %s\n", SDL_GetError( ) );
+				}
+			}
+		}
+	}
+
+	SDL_FreeSurface( icon );
+
+	if (!GLimp_DetectAvailableModes())
+	{
+		return RSERR_UNKNOWN;
+	}
+
+	return RSERR_OK;
+}
+
+void WIN_VK_CreateSurface(VkInstance * instance, VkSurfaceKHR * surface) {
+
+    if(!SDL_Vulkan_CreateSurface(screen, *instance, surface))
+        Com_Error(ERR_FATAL, "SDL_Vulkan: Could not create surface "); 
+}
+
+void WIN_VK_GetExtensions(VkInstance * instance, std::vector<const char*> *additionalExtensions) {
+	const char* instance_extensions[] = {
+#ifdef _WIN32
+		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#else
+		VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+#endif
+		VK_KHR_SURFACE_EXTENSION_NAME,
+#ifndef NDEBUG
+		VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+#endif
+	};
+	
+    unsigned int count;
+    if (!SDL_Vulkan_GetInstanceExtensions(screen, &count, nullptr)) 
+        Com_Error(ERR_FATAL, "SDL_Vulkan: Could not get extensions "); 
+
+    std::vector<const char*> extensions = {
+        VK_EXT_DEBUG_REPORT_EXTENSION_NAME // Sample additional extension
+    };
+    
+    if(additionalExtensions != nullptr) {
+        extensions.insert(extensions.end(), additionalExtensions->begin(), additionalExtensions->end());
+    }
+    
+    size_t additional_extension_count = extensions.size();
+    extensions.resize(additional_extension_count + count);
+
+    if (!SDL_Vulkan_GetInstanceExtensions(screen, &count, extensions.data() + additional_extension_count)) 
+        Com_Error(ERR_FATAL, "SDL_Vulkan: Could not get additional extensions "); 
+        
+    for (auto name : instance_extensions) {
+        bool supported = false;
+        for (const auto& property : extensions) {
+            if (!strcmp(property, name)) {
+                supported = true;
+                break;
+            }
+        }
+        if (!supported)
+            Com_Error(ERR_FATAL, "Vulkan: required instance extension is not available: %s", name);
+    }
+    // Now we can make the Vulkan instance
+    /*VkInstanceCreateInfo create_info = {};
+    create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    create_info.ppEnabledExtensionNames = extensions.data();*/
+    
+    VkInstanceCreateInfo desc;
+		desc.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+		desc.pNext = nullptr;
+		desc.flags = 0;
+		desc.pApplicationInfo = nullptr;
+		desc.enabledLayerCount = 0;
+		desc.ppEnabledLayerNames = nullptr;
+		desc.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+		desc.ppEnabledExtensionNames = extensions.data();
+
+#ifndef NDEBUG
+		const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
+		desc.enabledLayerCount = 1;
+		desc.ppEnabledLayerNames = &validation_layer_name;
+#endif
+
+    //return &create_info;
+    
+    VkResult result = vkCreateInstance(&desc, nullptr, instance);
+}
+
 /*
 ===============
 GLimp_StartDriverAndSetMode
@@ -702,8 +1135,15 @@ static qboolean GLimp_StartDriverAndSetMode(glconfig_t *glConfig, const windowDe
 		r_fullscreen->modified = qfalse;
 		fullscreen = qfalse;
 	}
-
-	err = GLimp_SetMode(glConfig, windowDesc, CLIENT_WINDOW_TITLE, mode, fullscreen, noborder);
+	if ( windowDesc->api == GRAPHICS_API_OPENGL )
+	{
+		err = GLimp_SetMode(glConfig, windowDesc, CLIENT_WINDOW_TITLE, mode, fullscreen, noborder);
+	}
+	else if ( windowDesc->api == GRAPHICS_API_VULKAN )
+    {
+		err = VKimp_SetMode(glConfig, windowDesc, CLIENT_WINDOW_TITLE, mode, fullscreen, noborder);
+    }
+	
 
 	switch ( err )
 	{

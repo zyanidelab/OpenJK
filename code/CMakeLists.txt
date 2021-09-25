@@ -28,6 +28,7 @@ endif(BuildSPGame)
 
 #    Add Modular Renderer project
 add_subdirectory("${SPDir}/rd-vanilla")
+add_subdirectory("${SPDir}/rd-vulkan")
 
 #    Add Engine Project
 if(BuildSPEngine OR BuildJK2SPEngine)
@@ -374,6 +375,10 @@ if(BuildSPEngine OR BuildJK2SPEngine)
     # Transparently use either bundled or system zlib.
     list(APPEND SPEngineIncludeDirectories ${ZLIB_INCLUDE_DIR})
     list(APPEND SPEngineLibraries          ${ZLIB_LIBRARIES})
+    
+    find_package(Vulkan REQUIRED)
+    list(APPEND SPEngineIncludeDirectories ${Vulkan_INCLUDE_DIR})
+    list(APPEND SPEngineLibraries          ${Vulkan_LIBRARY})
 
 	# project macro so we can invoke it twice: for jk2 and for ja
 	function(add_sp_project ProjectName Label SPDirName InstallDir Component)

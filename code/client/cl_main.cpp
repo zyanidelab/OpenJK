@@ -1163,6 +1163,8 @@ void CL_InitRef( void ) {
     rit.WIN_Present = WIN_Present;
 	rit.GL_GetProcAddress = WIN_GL_GetProcAddress;
 	rit.GL_ExtensionSupported = WIN_GL_ExtensionSupported;
+    rit.VK_CreateSurface = WIN_VK_CreateSurface;
+    rit.VK_GetExtensions = WIN_VK_GetExtensions;
 
 	rit.PD_Load = PD_Load;
 	rit.PD_Store = PD_Store;

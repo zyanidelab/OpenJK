@@ -26,6 +26,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "tr_types.h"
 #include "../qcommon/qcommon.h"
+#include <vulkan/vulkan.h>
+#include <vector>
 
 #include "../ghoul2/G2.h"
 #include "../ghoul2/ghoul2_gore.h"
@@ -103,7 +105,10 @@ typedef struct {
 	qboolean		(*GL_ExtensionSupported)			( const char *extension );
 
 	CMiniHeap *			(*GetG2VertSpaceServer)				( void );
-
+    // Vulkan specific
+	void			(*VK_CreateSurface)					(VkInstance * instance, VkSurfaceKHR * surface);
+	void			(*VK_GetExtensions)					(VkInstance * instance, std::vector<const char*> *additionalExtensions);
+    
 	// Persistent data store
 	bool			(*PD_Store)							( const char *name, const void *data, size_t size );
 	const void *	(*PD_Load)							( const char *name, size_t *size );
