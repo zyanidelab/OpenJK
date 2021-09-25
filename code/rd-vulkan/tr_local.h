@@ -130,7 +130,7 @@ typedef struct image_s {
 	word		width, height;				// source image
 //	int			imgfileSize;
 
-	uint		texnum;					// gl texture binding
+	unsigned int		texnum;					// gl texture binding
 	int			internalFormat;
 	int			wrapClampMode;		// GL_CLAMP or GL_REPEAT
 
@@ -996,19 +996,19 @@ typedef struct {
 	image_t					*screenImage; //reserve us a gl texnum to use with RF_DISTORTION
 
 	// Handle to the Glow Effect Vertex Shader. - AReis
-	uint					glowVShader;
+	unsigned int					glowVShader;
 
 	// Handle to the Glow Effect Pixel Shader. - AReis
-	uint					glowPShader;
+	unsigned int					glowPShader;
 
 	// Image the glowing objects are rendered to. - AReis
-	uint					screenGlow;
+	unsigned int					screenGlow;
 
 	// A rectangular texture representing the normally rendered scene.
-	uint					sceneImage;
+	unsigned int					sceneImage;
 
 	// Image used to downsample and blur scene to.	- AReis
-	uint					blurImage;
+	unsigned int					blurImage;
 
 	shader_t				*defaultShader;
 	shader_t				*cinematicShader;
