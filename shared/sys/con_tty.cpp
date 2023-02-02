@@ -155,10 +155,10 @@ static void CON_Show( void )
 	{
 		int i;
 
-		assert(ttycon_hide>0);
 		ttycon_hide--;
-		if (ttycon_hide == 0)
+		if (ttycon_hide <= 0)
 		{
+			ttycon_hide = 0;
 			size_t UNUSED_VAR size;
 			size = write(STDOUT_FILENO, TTY_CONSOLE_PROMPT, strlen(TTY_CONSOLE_PROMPT));
 			if (TTY_con.cursor)

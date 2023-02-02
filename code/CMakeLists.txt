@@ -346,6 +346,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		"${SharedDir}/sys/con_log.cpp"
 		"${SharedDir}/sdl/sdl_qgl.h"
 		"${SharedDir}/sdl/sdl_sound.cpp"
+		"${SharedDir}/sdl/sdl_imp.cpp"
 		"${SharedDir}/sdl/sdl_input.cpp"
 		"${SharedDir}/sdl/sdl_window.cpp"
 		"${SharedDir}/sdl/sdl_icon.h"

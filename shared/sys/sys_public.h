@@ -209,4 +209,9 @@ qboolean	WIN_GL_ExtensionSupported( const char *extension );
 void		WIN_VK_GetExtensions(void * inst, std::vector<const char*> *additionalExtensions);
 void		WIN_VK_CreateSurface(void * instance, void * surface);
 
+qboolean	GLimp_SpawnRenderThread( void (*function)( void ) );
+void *		GLimp_RendererSleep( void );
+void		GLimp_FrontEndSleep( void );
+void		GLimp_WakeRenderer( void *data );
+
 uint8_t ConvertUTF32ToExpectedCharset( uint32_t utf32 );

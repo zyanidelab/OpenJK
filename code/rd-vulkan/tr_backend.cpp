@@ -26,7 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_local.h"
 #include "tr_common.h"
 
-backEndData_t	*backEndData;
+backEndData_t	*backEndData[SMP_FRAMES];
 backEndState_t	backEnd;
 
 bool tr_stencilled = false;
@@ -1712,6 +1712,12 @@ void RB_ExecuteRenderCommands( const void *data ) {
 
 	t1 = ri.Milliseconds ();
 
+	if ( !r_smp->integer || data == backEndData[0]->commands.cmds ) {
+		backEnd.smpFrame = 0;
+	} else {
+		backEnd.smpFrame = 1;
+	}
+
 	while ( 1 ) {
 		data = PADP(data, sizeof(void *));
 
@@ -1752,6 +1758,30 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		}
 	}
 
+}
+
+/*
+================
+RB_RenderThread
+================
+*/
+void RB_RenderThread( void ) {
+	const void	*data;
+
+	// wait for either a rendering command or a quit command
+	while ( 1 ) {
+
+		// sleep until we have work to do
+		data = ri.GLimp_RendererSleep();
+
+		if ( !data ) {
+			return;	// all done, renderer is shutting down
+		}
+
+		renderThreadActive = qtrue;
+		RB_ExecuteRenderCommands( data );
+		renderThreadActive = qfalse;
+	}
 }
 
 // What Pixel Shader type is currently active (regcoms or fragment programs).

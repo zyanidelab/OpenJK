@@ -1166,6 +1166,11 @@ void CL_InitRef( void ) {
     rit.VK_CreateSurface = WIN_VK_CreateSurface;
     rit.VK_GetExtensions = WIN_VK_GetExtensions;
 
+    rit.GLimp_FrontEndSleep = GLimp_FrontEndSleep;
+    rit.GLimp_RendererSleep = GLimp_RendererSleep;
+    rit.GLimp_SpawnRenderThread = GLimp_SpawnRenderThread;
+    rit.GLimp_WakeRenderer = GLimp_WakeRenderer;
+
 	rit.PD_Load = PD_Load;
 	rit.PD_Store = PD_Store;
 

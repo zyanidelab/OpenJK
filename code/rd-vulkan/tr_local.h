@@ -44,6 +44,8 @@ extern refimport_t ri;
 #define TEX_ADD         2
 #define TEX_DECAL       3
 
+#define SMP_FRAMES      2
+
 // 13 bits
 // can't be increased without changing bit packing for drawsurfs
 // see QSORT_SHADERNUM_SHIFT
@@ -633,7 +635,7 @@ typedef struct srfGridMesh_s {
 	surfaceType_t	surfaceType;
 
 	// dynamic lighting information
-	int				dlightBits;
+	int				dlightBits[SMP_FRAMES];
 
 	// culling information
 	vec3_t			meshBounds[2];
@@ -666,7 +668,7 @@ typedef struct {
 	cplane_t	plane;
 
 	// dynamic lighting information
-	int			dlightBits;
+	int			dlightBits[SMP_FRAMES];
 
 	// triangle definitions (no normals at points)
 	int			numPoints;
@@ -682,7 +684,7 @@ typedef struct {
 	surfaceType_t	surfaceType;
 
 	// dynamic lighting information
-	int				dlightBits;
+	int				dlightBits[SMP_FRAMES];
 
 	// culling information (FIXME: use this!)
 	vec3_t			bounds[2];
@@ -945,6 +947,7 @@ typedef struct {
 // all state modified by the back end is seperated
 // from the front end state
 typedef struct {
+	int			smpFrame;
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;
 	orientationr_t	ori;
@@ -977,6 +980,8 @@ typedef struct {
 	int						sceneCount;		// incremented every scene
 	int						viewCount;		// incremented every view (twice a scene if portaled)
 											// and every R_MarkFragments call
+
+	int						smpFrame;		// toggles from 0 to 1 every endFrame
 
 	int						frameSceneNum;	// zeroed at RE_BeginFrame
 
@@ -1217,6 +1222,8 @@ extern	cvar_t	*r_portalOnly;
 
 extern	cvar_t	*r_subdivisions;
 extern	cvar_t	*r_lodCurveError;
+extern	cvar_t	*r_smp;
+extern	cvar_t	*r_showSmp;
 extern	cvar_t	*r_skipBackEnd;
 
 extern	cvar_t	*r_ignoreGLErrors;
@@ -1817,10 +1824,33 @@ typedef struct {
 	renderCommandList_t	commands;
 } backEndData_t;
 
-extern	backEndData_t	*backEndData;
+extern	backEndData_t	*backEndData[SMP_FRAMES];
+extern	volatile qboolean	renderThreadActive;
 
 void *R_GetCommandBuffer( int bytes );
+
+
+/*
+=============================================================
+
+RENDERER BACK END FUNCTIONS
+
+=============================================================
+*/
+
+void RB_RenderThread( void );
 void RB_ExecuteRenderCommands( const void *data );
+
+/*
+=============================================================
+
+RENDERER BACK END COMMAND QUEUE
+
+=============================================================
+*/
+
+void R_InitCommandBuffers( void );
+void R_ShutdownCommandBuffers( void );
 
 void R_IssuePendingRenderCommands( void );
 

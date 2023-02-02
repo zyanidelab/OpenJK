@@ -49,6 +49,8 @@ cvar_t	*r_detailTextures;
 
 cvar_t	*r_znear;
 
+cvar_t	*r_smp;
+cvar_t	*r_showSmp;
 cvar_t	*r_skipBackEnd;
 
 cvar_t	*r_measureOverdraw;
@@ -738,7 +740,10 @@ static void InitVulkan( void )
 		// initialize extensions
 		GLimp_InitExtensions( );
 	}
-	
+
+	// init command buffers and SMP
+	R_InitCommandBuffers();
+
     // set default state
     GL_SetDefaultState();
 	
@@ -1373,6 +1378,10 @@ void GfxInfo_f( void )
 	ri.Printf( PRINT_ALL, "Dynamic Glow: %s\n", enablestrings[r_DynamicGlow->integer ? 1 : 0] );
 	if (g_bTextureRectangleHack) Com_Printf ("Dynamic Glow ATI BAD DRIVER HACK %s\n", enablestrings[g_bTextureRectangleHack] );
 
+	if ( glConfig.smpActive ) {
+		ri.Printf( PRINT_ALL, "Using dual processor acceleration\n" );
+	}
+
 	if ( r_finish->integer ) {
 		ri.Printf( PRINT_ALL, "Forcing glFinish\n" );
 	}
@@ -1581,6 +1590,9 @@ void R_Register( void )
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE_ND | CVAR_LATCH);
 	ri.Cvar_CheckRange( r_subdivisions, 0, 80, qfalse );
+
+	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	r_showSmp = ri.Cvar_Get ("r_showSmp", "0", CVAR_CHEAT);
 	r_intensity = ri.Cvar_Get ("r_intensity", "1", CVAR_LATCH|CVAR_ARCHIVE_ND );
     r_roundImagesDown = ri.Cvar_Get ("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH );
     
@@ -1793,7 +1805,12 @@ void R_Init( void ) {
 	R_NoiseInit();
 	R_Register();
 
-	backEndData = (backEndData_t *) R_Hunk_Alloc( sizeof( backEndData_t ), qtrue );
+	backEndData[0] = (backEndData_t *) R_Hunk_Alloc( sizeof( *backEndData[0] ), qtrue );
+	if ( r_smp->integer ) {
+		backEndData[1] = (backEndData_t *) R_Hunk_Alloc( sizeof( *backEndData[1] ), qtrue );
+	} else {
+		backEndData[1] = NULL;
+	}
 	R_InitNextFrame();
 
 	const color4ub_t color = {0xff, 0xff, 0xff, 0xff};
@@ -1870,6 +1887,7 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	if ( tr.registered )
 	{
 		R_IssuePendingRenderCommands();
+		R_ShutdownCommandBuffers();
 		if ( destroyWindow )
 		{
 			R_DeleteTextures();	// only do this for vid_restart now, not during things like map load

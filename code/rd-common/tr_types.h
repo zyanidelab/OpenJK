@@ -252,6 +252,7 @@ typedef struct glconfig_s {
 	// used CDS.
 	qboolean				isFullscreen;
 	qboolean				stereoEnabled;
+	qboolean				smpActive;				// dual processor
 } glconfig_t;
 
 #endif	// __TR_TYPES_H
