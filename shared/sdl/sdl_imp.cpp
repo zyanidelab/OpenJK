@@ -34,6 +34,7 @@ static	void					*smpData;
 qboolean 						is_rendering;
 
 int GLimp_RenderThreadWrapper( void* data ) {
+	SDL_SetThreadPriority(SDL_ThreadPriority::SDL_THREAD_PRIORITY_HIGH);
 	glimpRenderThread();
 	return 0;
 }

@@ -1071,12 +1071,21 @@ void WIN_VK_GetExtensions(void * inst, std::vector<const char*> *additionalExten
     /*VkInstanceCreateInfo create_info = {};
     create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     create_info.ppEnabledExtensionNames = extensions.data();*/
-    
+
+    VkApplicationInfo vk_app_info = {
+            .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+            .pApplicationName   = "OpenJK vulkan renderer",
+            .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+            .pEngineName        = "vk",
+            .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
+            .apiVersion         = VK_API_VERSION_1_1,
+    };
+
     VkInstanceCreateInfo desc;
 		desc.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		desc.pNext = nullptr;
 		desc.flags = 0;
-		desc.pApplicationInfo = nullptr;
+		desc.pApplicationInfo = &vk_app_info;
 		desc.enabledLayerCount = 0;
 		desc.ppEnabledLayerNames = nullptr;
 		desc.enabledExtensionCount = static_cast<uint32_t>(extensions.size());

@@ -94,9 +94,6 @@ if(BuildSPRdVulkan OR BuildJK2SPRdVulkan)
 	source_group("common/safe" FILES ${SPRDVulkanCommonSafeFiles})
 	set(SPRDVulkanFiles ${SPRDVulkanFiles} ${SPRDVulkanCommonSafeFiles})
 
-	aux_source_directory(${SPDir}/rd-vulkan/shaders/spirv vk_spirv)
-	set(SPRDVulkanFiles ${SPRDVulkanFiles} ${vk_spirv})
-
 	# main files
 	set(SPRDVulkanMainFiles
 #		"${SPDir}/rd-vulkan/glext.h"
@@ -139,6 +136,16 @@ if(BuildSPRdVulkan OR BuildJK2SPRdVulkan)
 	source_group("renderer" FILES ${SPRDVulkanMainFiles})
 	set(SPRDVulkanFiles ${SPRDVulkanFiles} ${SPRDVulkanMainFiles})
 
+	set(SPRDVulkanShaders
+			"${SPDir}/rd-vulkan/shaders/multi_texture_add.frag"
+			"${SPDir}/rd-vulkan/shaders/multi_texture_clipping_plane.vert"
+			"${SPDir}/rd-vulkan/shaders/multi_texture_mul.frag"
+			"${SPDir}/rd-vulkan/shaders/multi_texture.vert"
+			"${SPDir}/rd-vulkan/shaders/single_texture_clipping_plane.vert"
+			"${SPDir}/rd-vulkan/shaders/single_texture.frag"
+			"${SPDir}/rd-vulkan/shaders/single_texture.vert"
+			)
+	
 	set(SPRDVulkanRdCommonFiles
 		"${SPDir}/rd-common/mdx_format.h"
 		"${SPDir}/rd-common/tr_common.h"
@@ -160,6 +167,17 @@ if(BuildSPRdVulkan OR BuildJK2SPRdVulkan)
 
 	set(SPRDVulkanRendererIncludeDirectories ${SPRDVulkanRendererIncludeDirectories} ${OpenJKLibDir})
 
+	include(compileShaders.cmake)
+
+	if (GLSLANG_COMPILER)
+		foreach(s ${SPRDVulkanShaders})
+			compile_shader(SOURCE_FILE ${s} OUTPUT_FILE_LIST shader_bytecode)
+		endforeach()
+
+		add_custom_target(vulkan_shaders DEPENDS ${shader_bytecode})
+	else()
+		message(WARNING "Could not find shader compiler: you're on your own to build the shaders")
+	endif()
 
 	if(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -230,10 +248,12 @@ if(BuildSPRdVulkan OR BuildJK2SPRdVulkan)
 
 	if(BuildSPRdVulkan)
 		add_sp_renderer_project(${SPRDVulkanRenderer} "SP Vulkan Renderer" ${SPEngine} ${JKAInstallDir} ${JKASPClientComponent})
+		add_dependencies(${SPRDVulkanRenderer} vulkan_shaders)
 	endif(BuildSPRdVulkan)
 	if(BuildJK2SPRdVulkan)
 		set(SPRDVulkanDefines ${SPRDVulkanDefines} "JK2_MODE")
 		add_sp_renderer_project(${JK2SPVulkanRenderer} "JK2 SP Vulkan Renderer" ${JK2SPEngine} ${JK2InstallDir} ${JK2SPClientComponent})
+		add_dependencies(${JK2SPVulkanRenderer} vulkan_shaders)
 	endif(BuildJK2SPRdVulkan)
 
 endif(BuildSPRdVulkan OR BuildJK2SPRdVulkan)

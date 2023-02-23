@@ -524,8 +524,8 @@ static void create_device() {
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &count, nullptr));
 
 		if (count == 0)
-			ri.Error(ERR_FATAL, "Vulkan: no physical device found");
-        else    
+			ri.Error(PRINT_ERROR, "Vulkan: no physical device found");
+        else
             ri.Printf( PRINT_ALL, "Found %i devices\n", count );
 		std::vector<VkPhysicalDevice> physical_devices(count);
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &count, physical_devices.data()));
@@ -643,6 +643,7 @@ static void init_vulkan_library() {
 	// Get instance level functions.
 	//
 	create_instance();
+	ri.Printf(PRINT_DEVELOPER, "Instance created\n");
 	/*INIT_INSTANCE_FUNCTION(vkCreateDevice)
 	INIT_INSTANCE_FUNCTION(vkDestroyInstance)
 	INIT_INSTANCE_FUNCTION(vkEnumerateDeviceExtensionProperties)
@@ -1182,49 +1183,13 @@ void vk_initialize() {
 	// Shader modules.
 	//
 	{
-		auto create_shader_module = [](const uint8_t* bytes, const int count) {
-			if (count % 4 != 0) {
-				ri.Error(ERR_FATAL, "Vulkan: SPIR-V binary buffer size is not multiple of 4");
-			}
-			VkShaderModuleCreateInfo desc;
-			desc.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			desc.pNext = nullptr;
-			desc.flags = 0;
-			desc.codeSize = count;
-			desc.pCode = reinterpret_cast<const uint32_t*>(bytes);
-			   
-			VkShaderModule module;
-			VK_CHECK(vkCreateShaderModule(vk.device, &desc, nullptr, &module));
-			return module;
-		};
-
-		extern unsigned char single_texture_vert_spv[];
-		extern unsigned long single_texture_vert_spv_length;
-		vk.single_texture_vs = create_shader_module(single_texture_vert_spv, single_texture_vert_spv_length);
-
-		extern unsigned char single_texture_clipping_plane_vert_spv[];
-		extern unsigned long single_texture_clipping_plane_vert_spv_length;
-		vk.single_texture_clipping_plane_vs = create_shader_module(single_texture_clipping_plane_vert_spv, single_texture_clipping_plane_vert_spv_length);
-
-		extern unsigned char single_texture_frag_spv[];
-		extern unsigned long single_texture_frag_spv_length;
-		vk.single_texture_fs = create_shader_module(single_texture_frag_spv, single_texture_frag_spv_length);
-
-		extern unsigned char multi_texture_vert_spv[];
-		extern unsigned long multi_texture_vert_spv_length;
-		vk.multi_texture_vs = create_shader_module(multi_texture_vert_spv, multi_texture_vert_spv_length);
-
-		extern unsigned char multi_texture_clipping_plane_vert_spv[];
-		extern unsigned long multi_texture_clipping_plane_vert_spv_length;
-		vk.multi_texture_clipping_plane_vs = create_shader_module(multi_texture_clipping_plane_vert_spv, multi_texture_clipping_plane_vert_spv_length);
-
-		extern unsigned char multi_texture_mul_frag_spv[];
-		extern unsigned long multi_texture_mul_frag_spv_length;
-		vk.multi_texture_mul_fs = create_shader_module(multi_texture_mul_frag_spv, multi_texture_mul_frag_spv_length);
-
-		extern unsigned char multi_texture_add_frag_spv[];
-		extern unsigned long multi_texture_add_frag_spv_length;
-		vk.multi_texture_add_fs = create_shader_module(multi_texture_add_frag_spv, multi_texture_add_frag_spv_length);
+		vk.single_texture_vs = vk_create_shader_module_from_file("single_texture.vert");
+		vk.single_texture_clipping_plane_vs = vk_create_shader_module_from_file("single_texture_clipping_plane.vert");
+		vk.single_texture_fs = vk_create_shader_module_from_file("single_texture.frag");
+		vk.multi_texture_vs = vk_create_shader_module_from_file("multi_texture.vert");
+		vk.multi_texture_clipping_plane_vs = vk_create_shader_module_from_file("multi_texture_clipping_plane.vert");
+		vk.multi_texture_mul_fs = vk_create_shader_module_from_file("multi_texture_mul.frag");
+		vk.multi_texture_add_fs = vk_create_shader_module_from_file("multi_texture_add.frag");
 	}
 
 	//
@@ -1351,6 +1316,38 @@ void vk_initialize() {
 		}
 	}
 	vk.active = true;
+}
+
+VkShaderModule
+vk_create_shader_module_from_file(const char *name)
+{
+    char path[1024];
+    snprintf(path, sizeof path, SHADER_PATH_TEMPLATE, name);
+
+    char *data;
+    size_t size;
+
+    ri.Printf(PRINT_ALL, "Loading shader module %s!\n", path );
+
+    size = ri.FS_ReadFile ( path, (void **)&data);
+    if(!data) {
+        ri.Printf(PRINT_WARNING, "Couldn't find shader module %s!\n", path );
+        return VK_NULL_HANDLE;
+    }
+
+    VkShaderModule module;
+
+    VkShaderModuleCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = size,
+            .pCode = (uint32_t *) data,
+    };
+
+    VK_CHECK(vkCreateShaderModule(vk.device, &create_info, NULL, &module));
+
+    ri.Z_Free(data);
+
+    return module;
 }
 
 void vk_shutdown() {

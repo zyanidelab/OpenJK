@@ -12,6 +12,11 @@
 #include <vulkan/vulkan.h>
 #include <SDL_vulkan.h>
 
+#ifndef VK_SHADER_DIR
+#define VK_SHADER_DIR "shader_vk"
+#endif
+
+#define SHADER_PATH_TEMPLATE VK_SHADER_DIR "/%s.spv"
 
 const int MAX_SWAPCHAIN_IMAGES = 8;
 const int MAX_VK_SAMPLERS = 32;
@@ -96,6 +101,7 @@ void vk_upload_image_data(VkImage image, int width, int height, bool mipmap, con
 void vk_update_descriptor_set(VkDescriptorSet set, VkImageView image_view, bool mipmap, bool repeat_texture);
 VkSampler vk_find_sampler(const Vk_Sampler_Def& def);
 VkPipeline vk_find_pipeline(const Vk_Pipeline_Def& def);
+VkShaderModule vk_create_shader_module_from_file(const char *name);
 
 //
 // Rendering setup.
