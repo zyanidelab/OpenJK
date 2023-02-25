@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_EXT_nonuniform_qualifier : enable
+
 layout(push_constant) uniform Transform {
     mat4 mvp;
 };

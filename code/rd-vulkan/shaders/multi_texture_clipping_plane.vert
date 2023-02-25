@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_EXT_nonuniform_qualifier : enable
+
 // 128 bytes
 layout(push_constant) uniform Transform {
     mat4 clip_space_xform;

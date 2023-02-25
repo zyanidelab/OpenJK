@@ -1833,7 +1833,6 @@ static const float logtestExp2 = (sqrt( -log( 1.0 / 255.0 ) ));
 extern bool tr_stencilled; //tr_backend.cpp
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
-    vk_bind_geometry();
     
 	int stage;
 #ifndef JK2_MODE
@@ -2095,6 +2094,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
         if (r_lightmap->integer && multitexture)
             GL_Bind(tr.whiteImage); // replace diffuse texture with a white one thus effectively render only lightmap
 
+		vk_bind_geometry();
         vk_shade_geometry(vk_pipeline, multitexture, depth_range);
 	}
 #ifndef JK2_MODE

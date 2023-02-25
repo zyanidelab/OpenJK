@@ -5,6 +5,7 @@
 #include <chrono>
 #include <functional>
 #include <vector>
+#include <array>
 
 const int VERTEX_CHUNK_SIZE = 512 * 1024;
 
@@ -20,6 +21,8 @@ const int ST1_OFFSET    = ST0_OFFSET + ST0_SIZE;
 
 static const int VERTEX_BUFFER_SIZE = XYZ_SIZE + COLOR_SIZE + ST0_SIZE + ST1_SIZE;
 static const int INDEX_BUFFER_SIZE = 2 * 1024 * 1024;
+
+std::vector<int>           images_to_update_bindless =  std::vector<int>();
 
 //
 // Vulkan API functions used by the renderer.
@@ -518,6 +521,10 @@ static void create_instance() {
 }
 
 static void create_device() {
+
+	VkPhysicalDeviceDescriptorIndexingFeatures indexing_features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES, nullptr };
+	VkPhysicalDeviceFeatures2 device_features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &indexing_features };
+
 	// select physical device
 	{
 		uint32_t count;
@@ -530,6 +537,14 @@ static void create_device() {
 		std::vector<VkPhysicalDevice> physical_devices(count);
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &count, physical_devices.data()));
 		vk.physical_device = physical_devices[0];
+	}
+
+	//Check bindless support
+	{
+
+		vkGetPhysicalDeviceFeatures2( vk.physical_device, &device_features );
+		if(!indexing_features.descriptorBindingPartiallyBound || !indexing_features.runtimeDescriptorArray)
+			ri.Error(ERR_FATAL, "Vulkan: bindless is not supported by the device!");
 	}
 
 	ri.VK_CreateSurface(&vk.instance, &vk.surface);
@@ -615,7 +630,7 @@ static void create_device() {
 
 		VkDeviceCreateInfo device_desc;
 		device_desc.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		device_desc.pNext = nullptr;
+		device_desc.pNext = &device_features;
 		device_desc.flags = 0;
 		device_desc.queueCreateInfoCount = 1;
 		device_desc.pQueueCreateInfos = &queue_desc;
@@ -623,7 +638,8 @@ static void create_device() {
 		device_desc.ppEnabledLayerNames = nullptr;
 		device_desc.enabledExtensionCount = sizeof(device_extensions)/sizeof(device_extensions[0]);
 		device_desc.ppEnabledExtensionNames = device_extensions;
-		device_desc.pEnabledFeatures = &features;
+		device_desc.pEnabledFeatures = NULL;
+		//device_desc.pEnabledFeatures = &features;
 		VK_CHECK(vkCreateDevice(vk.physical_device, &device_desc, nullptr, &vk.device));
 	}
 }
@@ -1079,7 +1095,7 @@ void vk_initialize() {
 		VkDescriptorPoolCreateInfo desc;
 		desc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		desc.pNext = nullptr;
-		desc.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // used by the cinematic images
+		desc.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT; // used by the cinematic images
 		desc.maxSets = MAX_DRAWIMAGES;
 		desc.poolSizeCount = 1;
 		desc.pPoolSizes = &pool_size;
@@ -1094,18 +1110,38 @@ void vk_initialize() {
 		VkDescriptorSetLayoutBinding descriptor_binding;
 		descriptor_binding.binding = 0;
 		descriptor_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptor_binding.descriptorCount = 1;
+		descriptor_binding.descriptorCount = MAX_VK_IMAGES;
 		descriptor_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		descriptor_binding.pImmutableSamplers = nullptr;
 
+		VkDescriptorBindingFlags bindless_flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | /*VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |*/ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
+		VkDescriptorBindingFlags binding_flags[ 1 ];
+
+		binding_flags[ 0 ] = bindless_flags;
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extended_info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT, nullptr };
+		extended_info.bindingCount = 1;
+		extended_info.pBindingFlags = binding_flags;
+
 		VkDescriptorSetLayoutCreateInfo desc;
 		desc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		desc.pNext = nullptr;
-		desc.flags = 0;
+		desc.pNext = &extended_info;
+		desc.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT;
 		desc.bindingCount = 1;
 		desc.pBindings = &descriptor_binding;
 
 		VK_CHECK(vkCreateDescriptorSetLayout(vk.device, &desc, nullptr, &vk.set_layout));
+	}
+
+	// create associated descriptor set
+	{
+		VkDescriptorSetAllocateInfo desc;
+		desc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		desc.pNext = nullptr;
+		desc.descriptorPool = vk.descriptor_pool;
+		desc.descriptorSetCount = 1;
+		desc.pSetLayouts = &vk.set_layout;
+		VK_CHECK(vkAllocateDescriptorSets(vk.device, &desc, &vk.bindless_descriptor_set));
 	}
 
 	//
@@ -1113,17 +1149,17 @@ void vk_initialize() {
 	//
 	{
 		VkPushConstantRange push_range;
-		push_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		push_range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 		push_range.offset = 0;
-		push_range.size = 128; // 32 floats
+		push_range.size = (VK_PUSH_CONSTANT_SIZE * 4); // 36 floats
 
-		VkDescriptorSetLayout set_layouts[2] = {vk.set_layout, vk.set_layout};
+		VkDescriptorSetLayout set_layouts[1] = {vk.set_layout };
 
 		VkPipelineLayoutCreateInfo desc;
 		desc.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		desc.pNext = nullptr;
 		desc.flags = 0;
-		desc.setLayoutCount = 2;
+		desc.setLayoutCount = 1;
 		desc.pSetLayouts = set_layouts;
 		desc.pushConstantRangeCount = 1;
 		desc.pPushConstantRanges = &push_range;
@@ -1487,7 +1523,7 @@ static void record_buffer_memory_barrier(VkCommandBuffer cb, VkBuffer buffer,
 	vkCmdPipelineBarrier(cb, src_stages, dst_stages, 0, 0, nullptr, 1, &barrier, 0, nullptr);
 }
 
-Vk_Image vk_create_image(int width, int height, VkFormat format, int mip_levels, bool repeat_texture) {
+Vk_Image vk_create_image(int width, int height, VkFormat format, int mip_levels, bool repeat_texture, int index) {
 	Vk_Image image;
 
 	// create image
@@ -1536,18 +1572,12 @@ Vk_Image vk_create_image(int width, int height, VkFormat format, int mip_levels,
 		VK_CHECK(vkCreateImageView(vk.device, &desc, nullptr, &image.view));
 	}
 
+	image.mipmap = mip_levels > 1;
+	image.repeat_texture = repeat_texture;
 	// create associated descriptor set
 	{
-		VkDescriptorSetAllocateInfo desc;
-		desc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		desc.pNext = nullptr;
-		desc.descriptorPool = vk.descriptor_pool;
-		desc.descriptorSetCount = 1;
-		desc.pSetLayouts = &vk.set_layout;
-		VK_CHECK(vkAllocateDescriptorSets(vk.device, &desc, &image.descriptor_set));
-
-		vk_update_descriptor_set(image.descriptor_set, image.view, mip_levels > 1, repeat_texture);
-		vk_world.current_descriptor_sets[glState.currenttmu] = image.descriptor_set;
+		//vk_world.current_descriptor_sets[glState.currenttmu] = image.descriptor_set;
+		images_to_update_bindless.push_back(index);
 	}
 
 	return image;
@@ -1604,37 +1634,6 @@ void vk_upload_image_data(VkImage image, int width, int height, bool mipmap, con
 		record_image_layout_transition(command_buffer, image, VK_IMAGE_ASPECT_COLOR_BIT,
 			VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	});
-}
-
-void vk_update_descriptor_set(VkDescriptorSet set, VkImageView image_view, bool mipmap, bool repeat_texture) {
-	Vk_Sampler_Def sampler_def;
-	sampler_def.repeat_texture = repeat_texture;
-	if (mipmap) {
-		sampler_def.gl_mag_filter = gl_filter_max;
-		sampler_def.gl_min_filter = gl_filter_min;
-	} else {
-		sampler_def.gl_mag_filter = VK_FILTER_LINEAR;
-		sampler_def.gl_min_filter = VK_FILTER_LINEAR;
-	}
-
-	VkDescriptorImageInfo image_info;
-	image_info.sampler = vk_find_sampler(sampler_def);
-	image_info.imageView = image_view;
-	image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-	VkWriteDescriptorSet descriptor_write;
-	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptor_write.dstSet = set;
-	descriptor_write.dstBinding = 0;
-	descriptor_write.dstArrayElement = 0;
-	descriptor_write.descriptorCount = 1;
-	descriptor_write.pNext = nullptr;
-	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptor_write.pImageInfo = &image_info;
-	descriptor_write.pBufferInfo = nullptr;
-	descriptor_write.pTexelBufferView = nullptr;
-
-	vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, nullptr);
 }
 
 static VkPipeline create_pipeline(const Vk_Pipeline_Def& def) {
@@ -2287,16 +2286,22 @@ void vk_bind_geometry() {
 	//
 	// Specify push constants.
 	//
-	float push_constants[16 + 12 + 4]; // mvp transform + eye transform + clipping plane in eye space
+	float push_constants[VK_PUSH_CONSTANT_SIZE]; // mvp transform + eye transform + clipping plane in eye space
 
 	get_mvp_transform(push_constants);
-	int push_constants_size = 64;
+
+	push_constants[16] = *((float*)(&(vk_world.current_image_index[0])));
+	push_constants[17] = *((float*)(&(vk_world.current_image_index[1])));
+	//push_constants[16] = vk_world.current_image_index[0];
+	//push_constants[17] = vk_world.current_image_index[1];
+
+	int push_constants_size = 18 * sizeof(float);
 
 	if (backEnd.viewParms.isPortal) {
 		// Eye space transform.
 		// NOTE: backEnd.or.modelMatrix incorporates s_flipMatrix, so it should be taken into account 
 		// when computing clipping plane too.
-		float* eye_xform = push_constants + 16;
+		float* eye_xform = push_constants + 18;
 		for (int i = 0; i < 12; i++) {
 			eye_xform[i] = backEnd.ori.modelMatrix[(i%4)*4 + i/4 ];
 		}
@@ -2315,14 +2320,14 @@ void vk_bind_geometry() {
 		eye_plane[3] = DotProduct (world_plane, backEnd.viewParms.ori.origin) - world_plane[3];
 
 		// Apply s_flipMatrix to be in the same coordinate system as eye_xfrom.
-		push_constants[28] = -eye_plane[1];
-		push_constants[29] =  eye_plane[2];
-		push_constants[30] = -eye_plane[0];
-		push_constants[31] =  eye_plane[3];
+		push_constants[30] = -eye_plane[1];
+		push_constants[31] =  eye_plane[2];
+		push_constants[32] = -eye_plane[0];
+		push_constants[33] =  eye_plane[3];
 
 		push_constants_size += 64;
 	}
-	vkCmdPushConstants(vk.command_buffer, vk.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, push_constants_size, push_constants);
+	vkCmdPushConstants(vk.command_buffer, vk.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, push_constants_size, push_constants);
 }
 
 void vk_shade_geometry(VkPipeline pipeline, bool multitexture, Vk_Depth_Range depth_range, bool indexed) {
@@ -2362,8 +2367,8 @@ void vk_shade_geometry(VkPipeline pipeline, bool multitexture, Vk_Depth_Range de
 	vk.color_st_elements += tess.numVertexes;
 
 	// bind descriptor sets
-	uint32_t set_count = multitexture ? 2 : 1;
-	vkCmdBindDescriptorSets(vk.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, 0, set_count, vk_world.current_descriptor_sets, 0, nullptr);
+	//uint32_t set_count = multitexture ? 2 : 1;
+	vkCmdBindDescriptorSets(vk.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, 0, 1, &vk.bindless_descriptor_set, 0, nullptr);
 
 	// bind pipeline
 	vkCmdBindPipeline(vk.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -2465,6 +2470,46 @@ void vk_end_frame() {
 	present_info.pImageIndices = &vk.swapchain_image_index;
 	present_info.pResults = nullptr;
 	VK_CHECK(vkQueuePresentKHR(vk.queue, &present_info));
+
+	if (!images_to_update_bindless.empty()) {
+
+		VkWriteDescriptorSet bindless_descriptor_writes[ images_to_update_bindless.size() ];
+		VkDescriptorImageInfo bindless_image_info[ images_to_update_bindless.size() ];
+
+		int current_write_index = 0;
+		for (auto & item : images_to_update_bindless) {
+			Vk_Image& image = vk_world.images[item];
+			VkWriteDescriptorSet& descriptor_write = bindless_descriptor_writes[ current_write_index ];
+			descriptor_write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+			descriptor_write.descriptorCount = 1;
+			descriptor_write.dstArrayElement = item;
+			descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptor_write.dstSet = vk.bindless_descriptor_set;
+			descriptor_write.dstBinding = 0;
+
+			Vk_Sampler_Def sampler_def;
+			sampler_def.repeat_texture = image.repeat_texture;
+			if (image.mipmap) {
+				sampler_def.gl_mag_filter = gl_filter_max;
+				sampler_def.gl_min_filter = gl_filter_min;
+			} else {
+				sampler_def.gl_mag_filter = VK_FILTER_LINEAR;
+				sampler_def.gl_min_filter = VK_FILTER_LINEAR;
+			}
+
+			VkDescriptorImageInfo& image_info = bindless_image_info[ current_write_index ];
+			image_info.sampler = vk_find_sampler(sampler_def);
+			image_info.imageView = image.view;
+			image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			descriptor_write.pImageInfo = &image_info;
+			current_write_index ++;
+		}
+
+		vkUpdateDescriptorSets( vk.device, current_write_index, bindless_descriptor_writes, 0, nullptr );
+
+		images_to_update_bindless.clear();
+	}
 }
 
 void vk_read_pixels(byte* buffer) {

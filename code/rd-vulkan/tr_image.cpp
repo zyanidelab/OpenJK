@@ -159,7 +159,7 @@ void GL_TextureMode( const char *string ) {
         //image_t* glt = tr.images[i];
         if (glt->mipmap) {
             Vk_Image& image = vk_world.images[glt->index];
-            vk_update_descriptor_set(image.descriptor_set, image.view, true, glt->wrapClampMode );
+            //vk_update_descriptor_set(image.descriptor_set, image.view, true, glt->wrapClampMode );
         }
         i++;
 	}
@@ -830,7 +830,7 @@ struct Image_Upload_Data {
 };
 
 
-static Vk_Image upload_vk_image(const Image_Upload_Data& upload_data, bool repeat_texture) {
+static Vk_Image upload_vk_image(const Image_Upload_Data& upload_data, bool repeat_texture, int index) {
 	int w = upload_data.base_level_width;
 	int h = upload_data.base_level_height;
 
@@ -880,7 +880,8 @@ static Vk_Image upload_vk_image(const Image_Upload_Data& upload_data, bool repea
 		}
 	}
 
-	Vk_Image image = vk_create_image(w, h, format, upload_data.mip_levels, repeat_texture);
+	Vk_Image image = vk_create_image(w, h, format, upload_data.mip_levels, repeat_texture, index);
+
 	vk_upload_image_data(image.handle, w, h, upload_data.mip_levels > 1, buffer, bytes_per_pixel);
 
 	if (bytes_per_pixel == 2)
@@ -1288,10 +1289,10 @@ image_t *R_CreateImage( const char *name, const byte *pic, int width, int height
 
 
     image->index = vk_world.num_images++;
-    ri.Printf( PRINT_DEVELOPER, "Loaded Image %s (%i x %i) vkidx = %i \n", name,width,height, image->index );
+    ri.Printf( PRINT_ALL, "Loaded Image %s (%i x %i) vkidx = %i \n", name,width,height, image->index );
 	Image_Upload_Data upload_data = generate_image_upload_data(pic, width, height, mipmap, allowPicmip);
 	glState.currenttextures[glState.currenttmu] = 0;
-	vk_world.images[image->index] = upload_vk_image(upload_data, repeat_texture);
+	vk_world.images[image->index] = upload_vk_image(upload_data, repeat_texture, image->index);
     
 	GL_Bind(image);
 

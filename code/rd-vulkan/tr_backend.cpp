@@ -58,12 +58,15 @@ static const float s_flipMatrix[16] = {
 */
 void GL_Bind( image_t *image ) {
 	int texnum;
+	int index;
 
 	if ( !image ) {
 		ri.Printf( PRINT_WARNING, "GL_Bind: NULL image\n" );
 		texnum = tr.defaultImage->texnum;
+		index = tr.defaultImage->index;
 	} else {
 		texnum = image->texnum;
+		index = image->index;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
@@ -76,8 +79,7 @@ void GL_Bind( image_t *image ) {
 		//qglBindTexture (GL_TEXTURE_2D, texnum);
 		
 		//VkDescriptorSet set = vk_world.images[image->index].descriptor_set;
-		VkDescriptorSet set = vk_world.images[image->index].descriptor_set;
-        vk_world.current_descriptor_sets[glState.currenttmu] = set;
+        vk_world.current_image_index[glState.currenttmu] = index;
 	}
 }
 

@@ -1078,7 +1078,7 @@ void WIN_VK_GetExtensions(void * inst, std::vector<const char*> *additionalExten
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName        = "vk",
             .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion         = VK_API_VERSION_1_1,
+            .apiVersion         = VK_API_VERSION_1_2,
     };
 
     VkInstanceCreateInfo desc;

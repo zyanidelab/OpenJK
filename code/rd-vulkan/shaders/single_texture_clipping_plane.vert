@@ -1,8 +1,12 @@
 #version 450
 
+#extension GL_EXT_nonuniform_qualifier : enable
+
 // 128 bytes
 layout(push_constant) uniform Transform {
     mat4 clip_space_xform;
+    float tex_idx_0;
+    float tex_idx_1;
     mat3x4 eye_space_xform;
     vec4 clipping_plane; // in eye space
 };

@@ -26,6 +26,8 @@ const int MAX_VK_IMAGES = 2048; // should be the same as MAX_DRAWIMAGES
 const int IMAGE_CHUNK_SIZE = 32 * 1024 * 1024;
 const int MAX_IMAGE_CHUNKS = 64;
 
+const int VK_PUSH_CONSTANT_SIZE = 36; //mvp transform + texture indices + eye transform + clipping plane in eye space
+
 #define VK_CHECK(function_call) { \
 	VkResult result = function_call; \
 	if (result < 0) \
@@ -72,6 +74,8 @@ struct Vk_Pipeline_Def {
 struct Vk_Image {
 	VkImage handle = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
+	bool  mipmap;
+	bool repeat_texture;
 
 	// Descriptor set that contains single descriptor used to access the given image.
 	// It is updated only once during image initialization.
@@ -96,9 +100,8 @@ void vk_release_resources();
 //
 // Resources allocation.
 //
-Vk_Image vk_create_image(int width, int height, VkFormat format, int mip_levels, bool repeat_texture);
+Vk_Image vk_create_image(int width, int height, VkFormat format, int mip_levels, bool repeat_texture, int index);
 void vk_upload_image_data(VkImage image, int width, int height, bool mipmap, const uint8_t* pixels, int bytes_per_pixel);
-void vk_update_descriptor_set(VkDescriptorSet set, VkImageView image_view, bool mipmap, bool repeat_texture);
 VkSampler vk_find_sampler(const Vk_Sampler_Def& def);
 VkPipeline vk_find_pipeline(const Vk_Pipeline_Def& def);
 VkShaderModule vk_create_shader_module_from_file(const char *name);
@@ -151,6 +154,8 @@ struct Vk_Instance {
 	VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
 	VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+
+	VkDescriptorSet bindless_descriptor_set = VK_NULL_HANDLE;
 
 	VkBuffer vertex_buffer = VK_NULL_HANDLE;
 	byte* vertex_buffer_ptr = nullptr; // pointer to mapped vertex buffer
@@ -247,8 +252,8 @@ struct Vk_World {
 	// State.
 	//
 
-	// Descriptor sets corresponding to bound texture images.
-	VkDescriptorSet current_descriptor_sets[2];
+	// Selected texture images.
+	int current_image_index[2];
 
 	// This flag is used to decide whether framebuffer's depth attachment should be cleared
 	// with vmCmdClearAttachment (dirty_depth_attachment == true), or it have just been

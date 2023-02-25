@@ -95,8 +95,8 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		Vk_Image& image = vk_world.images[tr.scratchImage[iClient]->index];
 		vkDestroyImage(vk.device, image.handle, nullptr);
 		vkDestroyImageView(vk.device, image.view, nullptr);
-		vkFreeDescriptorSets(vk.device, vk.descriptor_pool, 1, &image.descriptor_set);
-		image = vk_create_image(cols, rows, VK_FORMAT_R8G8B8A8_UNORM, 1, false);
+		//vkFreeDescriptorSets(vk.device, vk.descriptor_pool, 1, &image.descriptor_set);
+		image = vk_create_image(cols, rows, VK_FORMAT_R8G8B8A8_UNORM, 1, false, tr.scratchImage[iClient]->index);
 		vk_upload_image_data(image.handle, cols, rows, false, data, 4);
 		vk_world.images[tr.scratchImage[iClient]->index] = image;
         
@@ -228,7 +228,7 @@ void RE_UploadCinematic (int cols, int rows, const byte *data, int client, qbool
         vkDestroyImage(vk.device, image.handle, nullptr);
         vkDestroyImageView(vk.device, image.view, nullptr);
         vkFreeDescriptorSets(vk.device, vk.descriptor_pool, 1, &image.descriptor_set);
-        image = vk_create_image(cols, rows, VK_FORMAT_R8G8B8A8_UNORM, 1, false);
+        image = vk_create_image(cols, rows, VK_FORMAT_R8G8B8A8_UNORM, 1, false, tr.scratchImage[client]->index);
         vk_upload_image_data(image.handle, cols, rows, false, data, 4);
         vk_world.images[tr.scratchImage[client]->index] = image;
 	} else {
