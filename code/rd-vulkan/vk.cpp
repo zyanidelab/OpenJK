@@ -1976,6 +1976,9 @@ static VkPipeline create_pipeline(const Vk_Pipeline_Def& def) {
 
 	VkPipeline pipeline;
 	VK_CHECK(vkCreateGraphicsPipelines(vk.device, VK_NULL_HANDLE, 1, &create_info, nullptr, &pipeline));
+
+	//vkCmdBindDescriptorSets(vk.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, 0, 1, &vk.bindless_descriptor_set, 0, nullptr);
+	
 	return pipeline;
 }
 
@@ -2292,8 +2295,6 @@ void vk_bind_geometry() {
 
 	push_constants[16] = *((float*)(&(vk_world.current_image_index[0])));
 	push_constants[17] = *((float*)(&(vk_world.current_image_index[1])));
-	//push_constants[16] = vk_world.current_image_index[0];
-	//push_constants[17] = vk_world.current_image_index[1];
 
 	int push_constants_size = 18 * sizeof(float);
 
@@ -2367,7 +2368,6 @@ void vk_shade_geometry(VkPipeline pipeline, bool multitexture, Vk_Depth_Range de
 	vk.color_st_elements += tess.numVertexes;
 
 	// bind descriptor sets
-	//uint32_t set_count = multitexture ? 2 : 1;
 	vkCmdBindDescriptorSets(vk.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, 0, 1, &vk.bindless_descriptor_set, 0, nullptr);
 
 	// bind pipeline

@@ -407,13 +407,13 @@ GLimp_InitExtensions
 extern bool g_bDynamicGlowSupported;
 static void GLimp_InitExtensions( void )
 {
-	/*if ( !r_allowExtensions->integer )
-	{*/
+	if ( !r_allowExtensions->integer )
+	{
 		Com_Printf ("*** IGNORING EXTENSIONS ***\n" );
 		g_bDynamicGlowSupported = false;
 		ri.Cvar_Set( "r_DynamicGlow","0" );
 		return;
-	/*}
+	}
 
 	Com_Printf ("Initializing OpenGL extensions\n" );
 
@@ -421,8 +421,9 @@ static void GLimp_InitExtensions( void )
 	GLW_InitTextureCompression();
 
 	// GL_EXT_texture_env_add
-	glConfig.textureEnvAddAvailable = qfalse;
-	if ( ri.GL_ExtensionSupported( "GL_EXT_texture_env_add" ) )
+	glConfig.textureEnvAddAvailable = qtrue;
+	Com_Printf ("...using GL_EXT_texture_env_add\n" );
+	/*if ( ri.GL_ExtensionSupported( "GL_EXT_texture_env_add" ) )
 	{
 		if ( r_ext_texture_env_add->integer )
 		{
@@ -438,11 +439,13 @@ static void GLimp_InitExtensions( void )
 	else
 	{
 		Com_Printf ("...GL_EXT_texture_env_add not found\n" );
-	}
+	}*/
 
 	// GL_EXT_texture_filter_anisotropic
-	glConfig.maxTextureFilterAnisotropy = 0;
-	if ( ri.GL_ExtensionSupported( "GL_EXT_texture_filter_anisotropic" ) )
+	glConfig.maxTextureFilterAnisotropy = 16.0f;
+	ri.Cvar_SetValue( "r_ext_texture_filter_anisotropic_avail", glConfig.maxTextureFilterAnisotropy );
+	Com_Printf ("...using GL_EXT_texture_filter_anisotropic\n" );
+	/*if ( ri.GL_ExtensionSupported( "GL_EXT_texture_filter_anisotropic" ) )
 	{
 		qglGetFloatv( GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &glConfig.maxTextureFilterAnisotropy );
 		Com_Printf ("...GL_EXT_texture_filter_anisotropic available\n" );
@@ -1362,7 +1365,7 @@ void GfxInfo_f( void )
 	ri.Printf( PRINT_ALL, "compressed textures: %s\n", enablestrings[glConfig.textureCompression != TC_NONE] );
 	ri.Printf( PRINT_ALL, "compressed lightmaps: %s\n", enablestrings[(r_ext_compressed_lightmaps->integer != 0 && glConfig.textureCompression != TC_NONE)] );
 	ri.Printf( PRINT_ALL, "texture compression method: %s\n", tc_table[glConfig.textureCompression] );
-	ri.Printf( PRINT_ALL, "anisotropic filtering: %s  ", enablestrings[(r_ext_texture_filter_anisotropic->integer != 0) && glConfig.maxTextureFilterAnisotropy] );
+	ri.Printf( PRINT_ALL, "anisotropic filtering: %s\n", enablestrings[(r_ext_texture_filter_anisotropic->integer != 0) && glConfig.maxTextureFilterAnisotropy > 0] );
 	if (r_ext_texture_filter_anisotropic->integer != 0 && glConfig.maxTextureFilterAnisotropy)
 	{
 		if (Q_isintegral(r_ext_texture_filter_anisotropic->value))

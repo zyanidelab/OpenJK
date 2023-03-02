@@ -1289,7 +1289,7 @@ image_t *R_CreateImage( const char *name, const byte *pic, int width, int height
 
 
     image->index = vk_world.num_images++;
-    ri.Printf( PRINT_ALL, "Loaded Image %s (%i x %i) vkidx = %i \n", name,width,height, image->index );
+    ri.Printf( PRINT_DEVELOPER, "Loaded Image %s (%i x %i) vkidx = %i \n", name,width,height, image->index );
 	Image_Upload_Data upload_data = generate_image_upload_data(pic, width, height, mipmap, allowPicmip);
 	glState.currenttextures[glState.currenttmu] = 0;
 	vk_world.images[image->index] = upload_vk_image(upload_data, repeat_texture, image->index);
