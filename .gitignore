@@ -182,8 +182,15 @@ pip-log.txt
 ## clangd
 #############
 .clangd
+compile_commands.json
 
 #############
 ## CLion
 #############
 .idea
+
+#############
+## CMake Builds
+#############
+[Bb]uild*/
+cmake-build-*
